@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>デイリー Claude Code クイズ</title>
+<style>
+  :root{
+    --bg0:#120b06; --bg1:#2a1508;
+    --accent:#ff9a4d; --accent2:#ffd166;
+    --ok:#3fa96b; --ng:#d8483f;
+    --line:rgba(255,255,255,.16);
+    --text:#f6efe8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    background:radial-gradient(120% 120% at 50% 0%,var(--bg1),var(--bg0) 72%);
+    color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Segoe UI",sans-serif;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+  }
+  #stage{position:relative;width:min(100vw,480px);height:min(100vh,880px);overflow:hidden;}
+
+  /* ===== タイトル画面 ===== */
+  #title{
+    position:absolute;inset:0;z-index:30;padding:24px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  }
+  /* キーアート画像・イントロ動画の置き場所（無ければ自動で隠れる） */
+  #keyartLayer{position:absolute;inset:0;z-index:0;overflow:hidden;}
+  #keyart,#intro{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;}
+  #titleScrim{position:absolute;inset:0;z-index:1;
+    background:radial-gradient(110% 90% at 50% 35%,rgba(18,11,6,.35),rgba(18,11,6,.9) 78%);}
+  #titleInner{position:relative;z-index:2;}
+  h1{
+    font-size:clamp(24px,6.6vw,34px);font-weight:900;letter-spacing:.03em;line-height:1.35;
+    background:linear-gradient(90deg,var(--accent2),var(--accent));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 16px rgba(255,154,77,.45));
+  }
+  .sub{margin-top:10px;font-size:12px;letter-spacing:.3em;color:var(--accent);opacity:.9;}
+  .rule{
+    margin:22px auto 0;max-width:340px;padding:16px 18px;border-radius:14px;
+    background:rgba(30,18,10,.66);border:1px solid var(--line);
+    font-size:13px;line-height:1.95;text-align:left;
+  }
+  .btn{
+    margin-top:24px;cursor:pointer;user-select:none;border:none;
+    padding:15px 46px;font-size:18px;font-weight:800;letter-spacing:.14em;
+    color:#241202;border-radius:40px;
+    background:linear-gradient(90deg,var(--accent2),var(--accent));
+    box-shadow:0 0 26px rgba(255,154,77,.45);
+    transition:transform .12s,box-shadow .2s;
+  }
+  .btn:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 0 40px rgba(255,209,102,.55);}
+  .btn:active{transform:scale(.97);}
+  .btn.ghost{background:none;color:var(--text);border:1px solid var(--line);
+    box-shadow:none;font-size:14px;padding:11px 26px;letter-spacing:.08em;}
+  .btn.ghost:hover{background:rgba(255,255,255,.07);transform:none;box-shadow:none;}
+  #skipIntro{position:absolute;right:14px;bottom:14px;z-index:3;display:none;font-size:12px;padding:8px 16px;}
+
+  /* ===== クイズ画面 ===== */
+  #quiz{display:none;flex-direction:column;height:100%;padding:16px 16px 20px;}
+  header{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 14px;}
+  .logo{font-size:14px;font-weight:800;letter-spacing:.1em;color:var(--accent);}
+  .day{font-size:11px;opacity:.7;}
+  #progress{display:flex;gap:6px;margin-bottom:16px;}
+  .pip{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.14);}
+  .pip.ok{background:var(--ok);} .pip.ng{background:var(--ng);}
+  #qno{font-size:12px;letter-spacing:.18em;color:var(--accent);margin-bottom:8px;}
+  #question{font-size:19px;font-weight:800;line-height:1.65;margin-bottom:22px;}
+  #choices{display:flex;flex-direction:column;gap:10px;}
+  .choice{
+    display:flex;gap:12px;align-items:flex-start;text-align:left;cursor:pointer;
+    padding:14px 16px;border-radius:12px;font-size:15px;line-height:1.55;
+    background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);
+    transition:background .15s,border-color .15s,transform .1s;
+  }
+  .choice:hover{background:rgba(255,255,255,.12);}
+  .choice:active{transform:scale(.99);}
+  .choice .mark{font-weight:900;color:var(--accent);min-width:1.2em;}
+  .choice.ok{background:rgba(63,169,107,.28);border-color:var(--ok);}
+  .choice.ng{background:rgba(216,72,63,.25);border-color:var(--ng);}
+  .choice.dim{opacity:.45;}
+  .choice[disabled]{cursor:default;}
+  #explain{
+    margin-top:18px;padding:14px 16px;border-radius:12px;font-size:13.5px;line-height:1.8;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);display:none;
+  }
+  #explain b{color:var(--accent2);}
+  #nextBtn{display:none;margin:18px auto 0;}
+
+  /* ===== 結果 ===== */
+  #result{position:absolute;inset:0;z-index:40;display:none;
+    align-items:center;justify-content:center;padding:22px;
+    background:rgba(10,6,3,.88);backdrop-filter:blur(3px);}
+  .card{width:100%;max-width:340px;padding:26px 22px;border-radius:18px;text-align:center;
+    background:rgba(36,22,12,.97);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.55);}
+  .card h2{font-size:24px;letter-spacing:.06em;margin-bottom:4px;}
+  .score{font-size:15px;margin:8px 0 4px;opacity:.9;}
+  .score b{font-size:30px;color:var(--accent2);}
+  #shareHead{font-size:13px;line-height:1.7;opacity:.85;margin-top:14px;
+    white-space:normal;overflow-wrap:anywhere;}
+  #shareGrid{font-size:26px;line-height:1.3;letter-spacing:.08em;margin:6px 0 18px;
+    white-space:normal;overflow-wrap:anywhere;
+    font-family:"Segoe UI Emoji","Apple Color Emoji",sans-serif;}
+  #shareNote{font-size:12px;line-height:1.7;opacity:.8;margin-bottom:16px;
+    white-space:pre-line;overflow-wrap:anywhere;}
+  .next{font-size:12px;opacity:.7;margin-top:14px;line-height:1.75;}
+
+  /* ===== ふりかえり（回答の見返し） ===== */
+  #review{position:absolute;inset:0;z-index:50;display:none;flex-direction:column;
+    background:var(--bg0);}
+  #reviewHead{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 16px 12px;border-bottom:1px solid var(--line);}
+  #reviewHead .logo{font-size:15px;}
+  #reviewBody{flex:1;overflow-y:auto;padding:16px 16px 28px;-webkit-overflow-scrolling:touch;}
+  .rvDay{font-size:13px;font-weight:800;color:var(--accent);letter-spacing:.06em;
+    margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);}
+  .rvDay:first-child{margin-top:0;}
+  .rvItem{padding:14px 15px;border-radius:12px;margin-bottom:10px;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);}
+  .rvTag{font-size:11px;letter-spacing:.08em;color:var(--accent2);opacity:.9;}
+  .rvQ{font-size:14.5px;font-weight:800;line-height:1.6;margin:5px 0 10px;}
+  .rvLine{font-size:13px;line-height:1.75;}
+  .rvLine .lbl{display:inline-block;min-width:6.5em;margin-right:6px;opacity:.65;}
+  .rvOk{color:#7ddba4;} .rvNg{color:#ff9a92;}
+  .rvE{font-size:12.5px;line-height:1.75;margin-top:8px;padding-top:8px;
+    border-top:1px dashed var(--line);opacity:.9;}
+  .rvE b{color:var(--accent2);}
+  .rvEmpty{font-size:13px;line-height:1.9;opacity:.8;text-align:center;margin-top:40px;}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ===== タイトル ===== -->
+  <div id="title">
+    <!-- ▼ 背景素材。art/keyart.png（キーアート画像）と art/intro.mp4（イントロ動画）を置くだけで反映されます。
+         ファイルが無いときは JS が自動で隠すので、無くてもそのまま動きます。 -->
+    <div id="keyartLayer">
+      <img id="keyart" src="art/keyart.png" alt="">
+      <video id="intro" src="art/intro.mp4" muted loop playsinline preload="auto"></video>
+    </div>
+    <div id="titleScrim"></div>
+
+    <div id="titleInner">
+      <h1>デイリー<br>Claude Code クイズ</h1>
+      <div class="sub">1 日 3 問 の 4 択</div>
+      <div class="rule">
+        Claude Code の基本知識を、毎日3問の4択で出題します。<br>
+        答えるとその場で正解と解説が出ます。<br>
+        3問終わると結果が絵文字で出て、コピーしてSNSに貼れます。<br>
+        問題は毎日0時に切りかわります。
+      </div>
+      <button class="btn" id="startBtn">スタート</button><br>
+      <button class="btn ghost" id="historyBtn" style="margin-top:12px;">これまでの記録を見る</button>
+    </div>
+    <button class="btn ghost" id="skipIntro">動画をスキップ</button>
+  </div>
+
+  <!-- ===== クイズ ===== -->
+  <div id="quiz">
+    <header>
+      <div class="logo">Claude Code クイズ</div>
+      <div class="day" id="dayLabel"></div>
+    </header>
+    <div id="progress"></div>
+    <div id="qno"></div>
+    <div id="question"></div>
+    <div id="choices"></div>
+    <div id="explain"></div>
+    <button class="btn" id="nextBtn">つぎへ</button>
+  </div>
+
+  <!-- ===== 結果 ===== -->
+  <div id="result">
+    <div class="card">
+      <h2 id="resultTitle"></h2>
+      <div class="score"><b id="scoreText"></b> / 3 問 正解</div>
+      <div id="shareHead"></div>
+      <div id="shareGrid"></div>
+      <div id="shareNote"></div>
+      <button class="btn" id="copyBtn">結果をコピー</button>
+      <button class="btn ghost" id="reviewBtn" style="margin-top:10px;">答えを見返す</button>
+      <button class="btn ghost" id="closeBtn" style="margin-top:8px;">とじる</button>
+      <div class="next">次の問題は明日の0時に出ます。<br>コピーした結果はSNSにそのまま貼れます。</div>
+    </div>
+  </div>
+
+  <!-- ===== ふりかえり ===== -->
+  <div id="review">
+    <div id="reviewHead">
+      <div class="logo">こたえの見返し</div>
+      <button class="btn ghost" id="reviewClose" style="margin-top:0;padding:8px 18px;">もどる</button>
+    </div>
+    <div id="reviewBody"></div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     1. 問題データ（Claude Code の基本知識）
+        a: 正解の番号（0〜3）
+     ========================================================= */
+  const QUIZ = [
+    {t:"起動のしかた",
+     q:"Claude Code をターミナルから起動するコマンドは？",
+     c:["claude","claude-code","anthropic run","ccode start"],a:0,
+     e:"ターミナルで <b>claude</b> と打つと起動します。"},
+
+    {t:"CLAUDE.md",
+     q:"プロジェクト共通のルールや前提を書いておくファイルは？",
+     c:["README.md","CLAUDE.md",".clauderc","config.json"],a:1,
+     e:"<b>CLAUDE.md</b> はセッション開始時に自動で読み込まれ、指示として効きます。"},
+
+    {t:"Claude Code とは",
+     q:"Claude Code を開発している会社は？",
+     c:["OpenAI","Google","Anthropic","Meta"],a:2,
+     e:"Claude シリーズを作っている <b>Anthropic</b> の公式ツールです。"},
+
+    {t:"スラッシュコマンド",
+     q:"会話の履歴をリセットして新しく始めるコマンドは？",
+     c:["/clear","/reset","/new","/restart"],a:0,
+     e:"<b>/clear</b> で文脈を消して仕切り直せます。話題が変わったときに便利です。"},
+
+    {t:"スラッシュコマンド",
+     q:"決まった手順を登録して「/名前」で呼び出せる仕組みは？",
+     c:["ブックマーク","スラッシュコマンド","マクロ録画","ショートカット"],a:1,
+     e:"<b>スラッシュコマンド</b>。よく使う作業を定型化して繰り返せます。"},
+
+    {t:"サブエージェント",
+     q:"特定の役割を持たせた別のAIに作業を任せる機能は？",
+     c:["マルチウィンドウ","スレッド分岐","サブエージェント","バックグラウンド保存"],a:2,
+     e:"<b>サブエージェント</b>。役割ごとに分業でき、本体の文脈を汚さずに済みます。"},
+
+    {t:"MCP",
+     q:"外部のツールやサービスとAIをつなぐ共通規格は？",
+     c:["MCP","SMTP","RSS","FTP"],a:0,
+     e:"<b>MCP（Model Context Protocol）</b>。対応サーバーを足すと使える道具が増えます。"},
+
+    {t:"フック",
+     q:"ツールの実行前後に自動でコマンドを走らせる仕組みは？",
+     c:["タイマー","フック（Hooks）","cron","ウォッチャー"],a:1,
+     e:"<b>フック</b>。例えば編集直後に自動で git add する、といった安全網が作れます。"},
+
+    {t:"設定ファイル",
+     q:"権限やフックなどの設定を書くファイルは？",
+     c:["package.json",".env",".claude/settings.json","index.html"],a:2,
+     e:"<b>.claude/settings.json</b> に許可コマンドやフックを書きます。"},
+
+    {t:"プランモード",
+     q:"いきなり実装せず、先に計画を立てて承認をもらうモードは？",
+     c:["プランモード","セーフモード","ドライラン","レビューモード"],a:0,
+     e:"<b>プランモード</b>。大きめの作業前に方針をすり合わせられます。"},
+
+    {t:"Claude Code とは",
+     q:"Claude Code が使える場所として正しいのは？",
+     c:["ターミナルのみ","ブラウザのみ","スマホアプリのみ","ターミナル・デスクトップアプリ・Web・IDE拡張"],a:3,
+     e:"CLI のほか、デスクトップアプリ・Web・VS Code/JetBrains 拡張でも使えます。"},
+
+    {t:"スラッシュコマンド",
+     q:"使うモデルを切り替えるコマンドは？",
+     c:["/engine","/model","/switch","/ai"],a:1,
+     e:"<b>/model</b> で Opus や Sonnet などを切り替えられます。"},
+
+    {t:"コンテキスト",
+     q:"会話が長くなってコンテキストが埋まりそうなとき、Claude Code は？",
+     c:["強制終了する","課金が止まる","自動で要約して作業を続けられる","履歴が全部消える"],a:2,
+     e:"古い文脈は<b>自動で要約</b>され、続きから作業できます。"},
+
+    {t:"ファイル編集",
+     q:"Claude Code がファイルを編集する前に必ずすることは？",
+     c:["そのファイルを読み込む","ZIPでバックアップ","再起動","ブランチ作成"],a:0,
+     e:"未読のファイルは編集できない仕組みで、うっかり上書きを防いでいます。"},
+
+    {t:"設定ファイル",
+     q:"パソコン全体（全プロジェクト）に効く設定や記憶を置く場所は？",
+     c:["デスクトップ","ホームの ~/.claude フォルダ","Cドライブ直下","ゴミ箱"],a:1,
+     e:"ユーザー共通の設定は <b>~/.claude</b>、プロジェクト個別は <b>.claude/</b> に置きます。"},
+
+    {t:"使いこなし",
+     q:"Claude Code に画像を渡したいときは？",
+     c:["渡せない","チャットに貼り付けて渡せる","FAXで送る","印刷して見せる"],a:1,
+     e:"スクリーンショットなどを<b>貼り付け</b>て渡せます。画面の様子を伝えるのに便利です。"},
+
+    {t:"使いこなし",
+     q:"作業中の処理を途中で止めたいときに押すキーは？",
+     c:["Esc","F5","Ctrl+S","Alt+Tab"],a:0,
+     e:"<b>Esc</b> で実行中の作業を中断できます。方向がずれたら早めに止めるのがコツ。"},
+
+    {t:"Git",
+     q:"Git で、同じリポジトリの別ブランチを別フォルダとして同時に開く仕組みは？",
+     c:["stash","tag","worktree","blame"],a:2,
+     e:"<b>worktree</b>。並行作業に便利ですが、未コミットのまま消すと中身は失われます。"},
+
+    {t:"Git",
+     q:"変更内容を確認したいときの Git コマンドは？",
+     c:["git open","git diff","git make","git send"],a:1,
+     e:"<b>git diff</b> で、どこがどう変わったかを確認できます。"},
+
+    {t:"スラッシュコマンド",
+     q:"使い方やコマンド一覧を確認したいときは？",
+     c:["/help","/man","/info","/?"],a:0,
+     e:"<b>/help</b> で利用できるコマンドを一覧できます。"},
+
+    {t:"スキル",
+     q:"作業手順や専門知識をまとめて必要なときだけ読み込ませる機能は？",
+     c:["クリップボード","スキル（Skills）","タスクバー","履歴検索"],a:1,
+     e:"<b>スキル</b>。手順書をファイル化しておくと、毎回説明せずに同じ品質で作業できます。"},
+
+    {t:"ファイル検索",
+     q:"ファイルの中身を探すときに Claude Code がよく使うのは？",
+     c:["Grep / Glob","ペイント","タスクマネージャー","電卓"],a:0,
+     e:"<b>Grep</b>（中身の検索）と <b>Glob</b>（ファイル名の検索）を使い分けます。"},
+
+    {t:"Git",
+     q:".gitignore の役割は？",
+     c:["権限の設定","Git の管理対象から外すファイルを指定","ファイルの圧縮","ブランチの作成"],a:1,
+     e:"パスワードや一時ファイルなど、<b>履歴に入れたくないもの</b>を除外します。"},
+
+    {t:"MCP",
+     q:"MCP サーバーを追加・確認する CLI コマンドは？",
+     c:["npm mcp","pip mcp","claude mcp","git mcp"],a:2,
+     e:"<b>claude mcp</b> で接続先の追加や一覧確認ができます。"},
+
+    {t:"導入・更新",
+     q:"Claude Code をインストール／更新する一般的な方法は？",
+     c:["npm install -g @anthropic-ai/claude-code","Windows Update","ブラウザの更新","PCの再起動"],a:0,
+     e:"npm でグローバルに入れるのが基本です。"},
+
+    {t:"サブエージェント",
+     q:"サブエージェントを使う一番の利点は？",
+     c:["必ず料金が無料になる","通信なしで動く","役割ごとに分業でき、本体の文脈が散らからない","速度が必ず2倍になる"],a:2,
+     e:"調査・レビューなどを切り出すと、本体は本筋の作業に集中できます。"},
+
+    {t:"CLAUDE.md",
+     q:"CLAUDE.md はいつ読まれる？",
+     c:["毎回コピペが必要","セッション開始時に自動で読み込まれる","週に1回だけ","読まれない"],a:1,
+     e:"自動で読まれるので、繰り返し伝えている注意点はここに書くのが定石です。"},
+
+    {t:"Claude Code とは",
+     q:"Claude Code の利用に必要なものは？",
+     c:["誰でも無料で無制限","Claude の有料プラン、または API キー","メールアドレスだけ","専用ハードウェア"],a:1,
+     e:"Pro / Max などの契約か、Anthropic の API キーが必要です。"},
+
+    {t:"権限とモード",
+     q:"「危ない操作でも確認なしで実行させるモード」の通称は？",
+     c:["ターボモード","サイレントモード","デンジャラスモード","エキスパートモード"],a:2,
+     e:"権限確認を飛ばす<b>デンジャラスモード</b>。取り消せない操作もあるので扱いは慎重に。"},
+
+    {t:"Git",
+     q:"作業内容をあとから追いやすくするために大切なのは？",
+     c:["こまめにコミットして記録を残す","何も保存しない","毎回フォルダごと消す","履歴を削除する"],a:0,
+     e:"こまめな <b>commit</b> は、消失事故からの復旧にも効きます。"}
+  ];
+
+  const PER_DAY = 3;   // 1日の出題数
+
+  /* =========================================================
+     2. 今日の3問を決める（日付から毎日ちがう組み合わせ）
+     ========================================================= */
+  function todayKey(){
+    const d = new Date();
+    return d.getFullYear() + "-" +
+           String(d.getMonth()+1).padStart(2,"0") + "-" +
+           String(d.getDate()).padStart(2,"0");
+  }
+  function hash(str){
+    let h = 2166136261;
+    for(let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h,16777619); }
+    return h >>> 0;
+  }
+  const DAY_KEY = todayKey();
+
+  // その日の3問（QUIZ 配列の番号で持つ。あとで見返すときにも使う）
+  function pickIdx(dayKey){
+    const seed  = hash(dayKey);
+    const start = seed % QUIZ.length;
+    const step  = (seed % (QUIZ.length - 2)) + 1;   // 同じ問題が重複しないようずらす
+    const list = [];
+    for(let i=0;i<PER_DAY;i++) list.push((start + step*i) % QUIZ.length);
+    return list;
+  }
+  const TODAY_IDX = pickIdx(DAY_KEY);
+  const todays    = TODAY_IDX.map(function(i){ return QUIZ[i]; });
+
+  /* =========================================================
+     3. 進行状況の保存（同じ日は結果を再表示）
+     ========================================================= */
+  const SAVE_KEY = "claude-quiz-save";
+  const HIST_KEY = "claude-quiz-history";   // 過去の回答をためておく場所
+  const HIST_MAX = 60;                      // 直近60日ぶんを保存
+
+  function load(){
+    try{
+      const s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+      if(s && s.day === DAY_KEY){
+        if(!s.picks) s.picks = [];
+        return s;
+      }
+    }catch(e){}
+    return { day: DAY_KEY, marks: [], picks: [], done: false };
+  }
+  function save(){
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){}
+    saveHistory();
+  }
+
+  function loadHistory(){
+    try{ return JSON.parse(localStorage.getItem(HIST_KEY) || "[]") || []; }catch(e){ return []; }
+  }
+  // 今日の回答を履歴に反映する（同じ日は上書き）
+  function saveHistory(){
+    if(!state.marks.length) return;   // まだ1問も答えていない日は残さない
+    try{
+      let hist = loadHistory().filter(function(h){ return h.day !== DAY_KEY; });
+      hist.push({ day: DAY_KEY, idx: TODAY_IDX, marks: state.marks, picks: state.picks });
+      hist.sort(function(a,b){ return a.day < b.day ? 1 : -1; });   // 新しい日が先頭
+      if(hist.length > HIST_MAX) hist = hist.slice(0, HIST_MAX);
+      localStorage.setItem(HIST_KEY, JSON.stringify(hist));
+    }catch(e){}
+  }
+
+  let state = load();
+  let index = state.marks.length;   // いま何問目か
+  saveHistory();   // 見返し機能より前に答えた日ぶんも、起動時に履歴へ取り込む
+
+  /* =========================================================
+     4. 画面
+     ========================================================= */
+  const $ = id => document.getElementById(id);
+  $("dayLabel").textContent = DAY_KEY;
+
+  const progress = $("progress");
+  for(let i=0;i<PER_DAY;i++){
+    const pip = document.createElement("div");
+    pip.className = "pip";
+    progress.appendChild(pip);
+  }
+  function paintProgress(){
+    state.marks.forEach(function(ok,i){
+      progress.children[i].className = "pip " + (ok ? "ok" : "ng");
+    });
+  }
+
+  function render(){
+    const item = todays[index];
+    $("qno").textContent      = "第 " + (index+1) + " 問 / " + PER_DAY;
+    $("question").textContent = item.q;
+    $("explain").style.display = "none";
+    $("nextBtn").style.display = "none";
+
+    const box = $("choices");
+    box.innerHTML = "";
+    item.c.forEach(function(text,i){
+      const b = document.createElement("button");
+      b.className = "choice";
+      b.innerHTML = '<span class="mark">' + "ABCD"[i] + '</span><span></span>';
+      b.lastChild.textContent = text;
+      b.addEventListener("click", function(){ answer(i); });
+      box.appendChild(b);
+    });
+  }
+
+  function answer(picked){
+    const item = todays[index];
+    const ok = (picked === item.a);
+    const btns = $("choices").children;
+    for(let i=0;i<btns.length;i++){
+      btns[i].disabled = true;
+      if(i === item.a)          btns[i].classList.add("ok");
+      else if(i === picked)     btns[i].classList.add("ng");
+      else                      btns[i].classList.add("dim");
+    }
+    $("explain").innerHTML = (ok ? "正解！　" : "おしい！　正解は " + "ABCD"[item.a] + "　") + item.e;
+    $("explain").style.display = "block";
+
+    state.marks.push(ok);
+    state.picks.push(picked);   // 選んだ答えも残して、あとで見返せるようにする
+    save();
+    paintProgress();
+
+    $("nextBtn").textContent  = (index + 1 >= PER_DAY) ? "結果を見る" : "つぎへ";
+    $("nextBtn").style.display = "block";
+  }
+
+  $("nextBtn").addEventListener("click", function(){
+    index++;
+    if(index >= PER_DAY){
+      state.done = true; save();
+      showResult();
+    }else{
+      render();
+    }
+  });
+
+  /* =========================================================
+     5. 結果と絵文字グリッド（SNSシェア用）
+     ========================================================= */
+  function shareHead(){
+    const score = state.marks.filter(Boolean).length;
+    return "デイリー Claude Code クイズ " + DAY_KEY + "  " + score + "/" + PER_DAY;
+  }
+  function shareGrid(){
+    return state.marks.map(function(ok){ return ok ? "🟩" : "🟥"; }).join("");
+  }
+  // 出題テーマだけを載せる（問題文と答えは伏せる＝ネタバレなし）
+  function shareNote(){
+    const seen = [];
+    todays.forEach(function(item){ if(seen.indexOf(item.t) < 0) seen.push(item.t); });
+    return "今日のテーマ：" + seen.join(" / ") + "\n" +
+           "Claude Code の基本、何問わかる？（答えは伏せています）";
+  }
+  function shareText(){ return shareHead() + "\n" + shareGrid() + "\n" + shareNote(); }
+  function showResult(){
+    const score = state.marks.filter(Boolean).length;
+    $("resultTitle").textContent = score === PER_DAY ? "全問正解！" : score >= 2 ? "いい調子！" : "また明日！";
+    $("scoreText").textContent   = score;
+    $("shareHead").textContent   = shareHead();
+    $("shareGrid").textContent   = shareGrid();
+    $("shareNote").textContent   = shareNote();
+    $("result").style.display = "flex";
+  }
+  $("closeBtn").addEventListener("click", function(){ $("result").style.display = "none"; });
+  $("copyBtn").addEventListener("click", function(){
+    const text = shareText();
+    function done(){
+      $("copyBtn").textContent = "コピーしました！";
+      setTimeout(function(){ $("copyBtn").textContent = "結果をコピー"; }, 1600);
+    }
+    function fallback(){
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand("copy"); done(); }catch(e){ alert(text); }
+      document.body.removeChild(ta);
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, fallback);
+    }else fallback();
+  });
+
+  /* =========================================================
+     6. ふりかえり（答えた内容をあとから見返す）
+        - その日に出た問題・自分が選んだ答え・正解・解説を一覧表示
+        - 直近60日ぶんを新しい順に表示する
+     ========================================================= */
+  function openReview(){
+    const body = $("reviewBody");
+    body.innerHTML = "";
+
+    const hist = loadHistory().filter(function(h){
+      return h && h.idx && h.marks && h.marks.length;
+    });
+
+    // 今日の分をやり直したいとき用（選んだ答えを残したい場合など）
+    if(state.marks.length){
+      const again = document.createElement("button");
+      again.className = "btn ghost";
+      again.style.cssText = "display:block;margin:0 auto 18px;font-size:12px;padding:9px 20px;";
+      again.textContent = "今日の3問をもう一度解く";
+      again.addEventListener("click", function(){
+        if(!confirm("今日の記録を消して、もう一度3問を解きますか？")) return;
+        try{
+          localStorage.removeItem(SAVE_KEY);
+          localStorage.setItem(HIST_KEY, JSON.stringify(
+            loadHistory().filter(function(h){ return h.day !== DAY_KEY; })));
+        }catch(e){}
+        location.reload();
+      });
+      body.appendChild(again);
+    }
+
+    if(!hist.length){
+      const empty = document.createElement("div");
+      empty.className = "rvEmpty";
+      empty.textContent = "まだ記録がありません。クイズに答えると、ここに問題と答えが残ります。";
+      body.appendChild(empty);
+    }else{
+      hist.forEach(function(h){
+        const score = h.marks.filter(Boolean).length;
+        const head = document.createElement("div");
+        head.className = "rvDay";
+        head.textContent = h.day + "　" + score + " / " + h.marks.length + " 問 正解";
+        body.appendChild(head);
+
+        h.marks.forEach(function(mark, i){
+          const item = QUIZ[h.idx[i]];
+          if(!item) return;
+          const pick = (h.picks && h.picks.length > i) ? h.picks[i] : null;  // 古い記録は選んだ答えが無い
+          const ok = mark;
+
+          const box = document.createElement("div");
+          box.className = "rvItem";
+
+          const tag = document.createElement("div");
+          tag.className = "rvTag";
+          tag.textContent = item.t;
+
+          const q = document.createElement("div");
+          q.className = "rvQ";
+          q.textContent = item.q;
+
+          const mine = document.createElement("div");
+          mine.className = "rvLine";
+          const mineLbl = document.createElement("span");
+          mineLbl.className = "lbl"; mineLbl.textContent = "あなたの答え";
+          const mineVal = document.createElement("span");
+          if(pick === null){
+            mineVal.className = ok ? "rvOk" : "rvNg";
+            mineVal.textContent = (ok ? "○ 正解しました" : "× まちがえました") + "（選んだ答えは記録なし）";
+          }else{
+            mineVal.className = ok ? "rvOk" : "rvNg";
+            mineVal.textContent = (ok ? "○ " : "× ") + item.c[pick];
+          }
+          mine.appendChild(mineLbl); mine.appendChild(mineVal);
+
+          const ans = document.createElement("div");
+          ans.className = "rvLine";
+          const ansLbl = document.createElement("span");
+          ansLbl.className = "lbl"; ansLbl.textContent = "正解";
+          const ansVal = document.createElement("span");
+          ansVal.className = "rvOk"; ansVal.textContent = item.c[item.a];
+          ans.appendChild(ansLbl); ans.appendChild(ansVal);
+
+          const ex = document.createElement("div");
+          ex.className = "rvE";
+          ex.innerHTML = item.e;   // 解説（このファイル内で用意した文章）
+
+          box.appendChild(tag); box.appendChild(q);
+          box.appendChild(mine); box.appendChild(ans); box.appendChild(ex);
+          body.appendChild(box);
+        });
+      });
+    }
+
+    $("review").style.display = "flex";
+    body.scrollTop = 0;
+  }
+  $("reviewBtn").addEventListener("click", openReview);
+  $("historyBtn").addEventListener("click", openReview);
+  $("reviewClose").addEventListener("click", function(){ $("review").style.display = "none"; });
+
+  /* =========================================================
+     7. タイトル → 開始
+     ========================================================= */
+  function startGame(){
+    stopIntro();
+    $("title").style.display = "none";
+    $("quiz").style.display  = "flex";
+    paintProgress();
+    if(state.done || index >= PER_DAY){ showResult(); }
+    else { render(); }
+  }
+  $("startBtn").addEventListener("click", startGame);
+
+  /* ---------------------------------------------------------
+     キーアート画像／イントロ動画（無ければ何もしない）
+     - assets/keyart.png があれば背景画像として表示
+     - assets/intro.mp4 があればタイトルで一度だけ再生
+     - どちらも無い／読めない場合は今の見た目のまま動く
+     --------------------------------------------------------- */
+  const keyart = $("keyart"), intro = $("intro"), skip = $("skipIntro");
+  function showKeyart(){ if(keyart.naturalWidth) keyart.style.display = "block"; }
+  keyart.addEventListener("load",  showKeyart);
+  keyart.addEventListener("error", function(){ keyart.style.display = "none"; });
+  if(keyart.complete) showKeyart();   // スクリプトより先に読み終わっていた場合
+
+  function stopIntro(){
+    try{ intro.pause(); }catch(e){}
+    intro.style.display = "none";
+    skip.style.display  = "none";
+  }
+  function playIntro(){
+    intro.style.display = "block";
+    skip.style.display  = "block";
+    intro.muted = true;                    // 音は必ず消したまま（自動再生の条件でもある）
+    const p = intro.play();
+    if(p && p.catch) p.catch(stopIntro);   // 自動再生がブロックされたら静かに諦める
+  }
+  intro.addEventListener("error", stopIntro);
+  intro.addEventListener("canplay", playIntro);
+  if(intro.readyState >= 3) playIntro();   // スクリプトより先に読み終わっていた場合
+  skip.addEventListener("click", stopIntro);
+  setTimeout(function(){ if(intro.readyState === 0) stopIntro(); }, 2500);  // 保険
+
+})();
+</script>
+</body>
+</html>
