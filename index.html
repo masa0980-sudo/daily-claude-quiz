@@ -958,9 +958,58 @@
   $("reviewClose").addEventListener("click", function(){ $("review").style.display = "none"; });
 
   /* =========================================================
-     7. タイトル → 開始
+     7. PlayCounts — 累計プレイ回数（Firestore, カウントのみ）
+        Rhythm_game/tennis-game/neon-void と同じ方針でSDKを使わずfetch()で
+        完結させる。rythm-game-mo は複数の公開ゲームでプレイ回数の記録先として
+        共有しており、このアプリは gameId "daily-quiz" で1件のドキュメントに記録する。
+     ========================================================= */
+  const PlayCounts = (function(){
+    const PROJECT_ID = "rythm-game-mo";
+    const API_KEY = "AIzaSyBBo4f_LqJ2lfdKu8Q11oeiiYq_O-15LSc";
+    const ROOT = "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID + "/databases/(default)/documents";
+
+    // 再生開始のたびに+1。失敗してもクイズ自体には一切影響させない（fire-and-forget）。
+    // 既存ドキュメントへのincrementを先に試し、無ければ(初回プレイ)count:1での
+    // 新規作成にフォールバックする（ルール側もcount==1での新規作成のみ許可）。
+    function increment(gameId){
+      const commitUrl = ROOT + ":commit?key=" + API_KEY;
+      const docPath = "projects/" + PROJECT_ID + "/databases/(default)/documents/playCounts/" + encodeURIComponent(gameId);
+      const incrementBody = {
+        writes: [{
+          transform: {
+            document: docPath,
+            fieldTransforms: [{ fieldPath: "count", increment: { integerValue: "1" } }]
+          }
+        }]
+      };
+      const createBody = {
+        writes: [{
+          update: { name: docPath, fields: { count: { integerValue: "1" } } },
+          currentDocument: { exists: false }
+        }]
+      };
+      return fetch(commitUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(incrementBody)
+      }).then(function(res){
+        if(res.ok) return;
+        return fetch(commitUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(createBody)
+        });
+      }).catch(function(e){ console.warn("playCount increment failed:", e); });
+    }
+
+    return { increment };
+  })();
+
+  /* =========================================================
+     8. タイトル → 開始
      ========================================================= */
   function startGame(){
+    PlayCounts.increment("daily-quiz");   // STARTボタン押下のたびにカウント
     stopIntro();
     $("title").style.display = "none";
     $("quiz").style.display  = "flex";
